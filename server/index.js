@@ -95,11 +95,8 @@ app.post('/api/translate', async (req, res) => {
 
     const targetLangName = languageMap[targetLanguage] || 'Chinese';
 
-    // Create prompt for LLM translation
-    const prompt = `Translate the following English text to ${targetLangName}. Only provide the translation, nothing else.
-
-English: "${text}"
-${targetLangName}:`;
+    // Create prompt for LLM translation (optimized for speed)
+    const prompt = `Translate to ${targetLangName}: ${text}`;
 
     try {
       // Call Ollama API for translation
@@ -107,8 +104,9 @@ ${targetLangName}:`;
         model: OLLAMA_MODEL,
         prompt: prompt,
         stream: false,
-        temperature: 0.3 // Low temperature for consistent translations
-      }, { timeout: 30000 });
+        temperature: 0.1, // Very low for consistent, fast translations
+        top_p: 0.5 // Reduce sampling space for faster inference
+      }, { timeout: 10000 });
 
       const translated = response.data.response.trim();
 
@@ -184,18 +182,16 @@ app.post('/api/translate-audio', async (req, res) => {
     };
 
     const targetLangName = languageMap[targetLanguage] || 'Chinese';
-    const prompt = `Translate the following English text to ${targetLangName}. Only provide the translation, nothing else.
-
-English: "${text}"
-${targetLangName}:`;
+    const prompt = `Translate to ${targetLangName}: ${text}`;
 
     try {
       const response = await axios.post(`${OLLAMA_API}/api/generate`, {
         model: OLLAMA_MODEL,
         prompt: prompt,
         stream: false,
-        temperature: 0.3
-      }, { timeout: 30000 });
+        temperature: 0.1,
+        top_p: 0.5
+      }, { timeout: 10000 });
 
       const translated = response.data.response.trim();
 
