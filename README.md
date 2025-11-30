@@ -93,26 +93,27 @@ See:
    # macOS
    brew install ollama
    ollama serve
-   
-   # In another terminal, pull a model (mistral recommended)
-   ollama pull mistral
    ```
 
-2. **Install dependencies**:
+2. **Pull a model** (in another terminal):
    ```bash
-   cd /Users/bhargav/Desktop/Live-Translate-Xu-Yuan/server
-   npm install
+   # Recommended: Phi (fastest, 2.6GB)
+   ollama pull phi
    
-   cd ../client
-   npm install
+   # Or try other models:
+   ollama pull mistral       # Balanced (4.4GB)
+   ollama pull neural-chat   # High quality (4GB)
    ```
 
-3. **Start both servers**:
+3. **Start the app** (single command):
    ```bash
-   /Users/bhargav/Desktop/Live-Translate-Xu-Yuan/start.sh
+   cd /Users/bhargav/Desktop/Live-Translate-Xu-Yuan
+   ./dev-start.sh
    ```
 
 4. **Open in browser**: `http://localhost:3000`
+
+**That's it!** The script handles all dependencies and starts both backend and frontend.
 
 ## How It Works
 
@@ -125,14 +126,22 @@ See:
 
 ### Translation Technology
 
-The app now uses **Ollama** - a local LLM framework that:
+The app uses **Ollama** - a local LLM framework that:
 - ✅ Runs entirely on your machine (no cloud API needed)
 - ✅ Supports any language pair
-- ✅ <500ms translation latency
+- ✅ **<200ms translation latency** with Phi model
 - ✅ Completely private (no data sent to external servers)
 - ✅ Free and open-source
 
-Supported models: Mistral, Llama2, Neural-Chat, Phi, and more
+**Recommended Models:**
+
+| Model | Size | Speed | Quality | Best For |
+|-------|------|-------|---------|----------|
+| **phi** | 2.6GB | ⚡⚡⚡ Fastest | Good | Real-time conversations |
+| mistral | 4.4GB | ⚡⚡ Fast | Very Good | Higher quality translations |
+| neural-chat | 4GB | ⚡⚡ Fast | Excellent | Best quality |
+
+Default: **Phi** (fastest for real-time)
 
 ### Fallback Mode
 
@@ -140,18 +149,23 @@ If Ollama isn't running, the app automatically uses a dictionary of common phras
 
 ## Ollama Integration
 
-The backend calls Ollama's API to translate text:
+The backend calls Ollama's API to translate text using the configured model:
 
 ```javascript
 const response = await axios.post('http://localhost:11434/api/generate', {
-  model: 'mistral',
+  model: 'phi',  // Currently using Phi for speed
   prompt: 'Translate to Chinese: ' + text,
   stream: false,
-  temperature: 0.3
+  temperature: 0.1
 });
 ```
 
-**See [OLLAMA_SETUP.md](OLLAMA_SETUP.md) for detailed setup instructions.**
+**Configure the model** in `server/.env`:
+```env
+OLLAMA_MODEL=phi
+```
+
+**See [OLLAMA_SETUP.md](OLLAMA_SETUP.md) for detailed setup instructions and alternative models.**
 
 ## API Endpoints
 
