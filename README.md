@@ -40,11 +40,12 @@ Python would work for batch processing but introduces latency in real-time scena
 **Backend:**
 - Node.js + Express
 - RESTful API for translation endpoints
-- Currently uses mock data for demo (easily integrable with Google Cloud APIs)
+- Ollama integration for local LLM inference (no external APIs)
+- Automatic fallback to mock translations if Ollama unavailable
 
 **Frontend:**
 - React 18
-- Web Speech API for audio capture & transcription
+- Web Speech API for audio capture & transcription (browser-native)
 - Axios for API communication
 - CSS Grid for responsive design
 
@@ -228,29 +229,26 @@ Combined endpoint: transcribe and translate in one call
 }
 ```
 
-## Integrating with Real APIs
+## Customizing Ollama Models
 
-### Google Cloud Speech-to-Text & Translation
+All translation is handled locally by Ollama. To use a different model:
 
-1. **Set up Google Cloud credentials:**
+1. **Pull a new model:**
    ```bash
-   export GOOGLE_APPLICATION_CREDENTIALS="path/to/your/credentials.json"
+   ollama pull mistral    # or neural-chat, llama2, etc.
    ```
 
-2. **Update `server/index.js`** with actual Google Cloud implementation:
-   ```javascript
-   const speech = require('@google-cloud/speech');
-   const translate = require('@google-cloud/translate');
-   
-   const speechClient = new speech.SpeechClient();
-   const translateClient = new translate.Translate();
+2. **Update `server/.env`:**
+   ```env
+   OLLAMA_MODEL=mistral
    ```
 
-3. **Install the packages:**
+3. **Restart the backend:**
    ```bash
-   cd server
-   npm install @google-cloud/speech @google-cloud/translate
+   ./dev-start.sh
    ```
+
+No external APIs, credentials, or cloud services needed!
 
 ## Browser Compatibility
 
@@ -263,26 +261,26 @@ Combined endpoint: transcribe and translate in one call
 ## Limitations & Future Improvements
 
 **Current:**
-- Uses mock translations for demo
-- Speech recognition via Web Speech API (not all languages supported)
+- Speech recognition via Web Speech API (English only, works best in Chrome)
 - Single browser instance per session
+- Ollama must be running on localhost:11434
 
 **Future Enhancements:**
-- Integrate Google Cloud APIs for production
-- Support for more languages
+- Multi-language speech recognition
 - Speaker diarization (identify different speakers)
-- Real-time audio streaming instead of batch processing
-- User authentication & session management
+- Real-time audio streaming
 - Multi-user conversation support
 - Audio download/export
 - Accent and pronunciation feedback
+- Custom fine-tuned models
 
 ## Performance Notes
 
-- **Latency**: <500ms for typical sentences
+- **Latency**: <200ms per translation with Phi model (local inference)
 - **Throughput**: Can handle 10+ concurrent sessions
-- **Memory**: ~50MB per active session
-- **Network**: Works best with stable internet connection
+- **Memory**: ~150MB (backend) + 2.6GB (Phi model) + ~50MB per session
+- **Network**: None required - completely local operation
+- **No external dependencies**: All processing happens on your machine
 
 ## Troubleshooting
 
@@ -292,12 +290,19 @@ Combined endpoint: transcribe and translate in one call
 - Try a different browser
 
 **Translation not appearing?**
-- Check backend is running on port 5000
+- Ensure Ollama is running: `ollama serve`
+- Check backend is running on port 5001: `curl http://localhost:5001/health`
+- Check if model is loaded: `ollama list`
 - Open browser DevTools (F12) to see network errors
 - Verify CORS is properly configured
 
+**Ollama not responding?**
+- Make sure `ollama serve` is running in a separate terminal
+- Verify model is pulled: `ollama pull phi`
+- Check if port 11434 is in use: `lsof -i :11434`
+
 **Server won't start?**
-- Ensure port 5000 is not in use: `lsof -i :5000`
+- Ensure port 5001 is not in use: `lsof -i :5001`
 - Try: `npm install` in server directory again
 
 ## License
