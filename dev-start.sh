@@ -47,6 +47,42 @@ echo -e "${BLUE}Checking ports...${NC}"
 kill_port 5001
 kill_port 3000
 
+# Check if Ollama is installed and start it
+echo -e "${BLUE}Checking for Ollama...${NC}"
+if command -v ollama &> /dev/null; then
+    if ! lsof -Pi :11434 -sTCP:LISTEN -t >/dev/null 2>&1; then
+        echo -e "${YELLOW}Starting Ollama server...${NC}"
+        ollama serve > /tmp/ollama.log 2>&1 &
+        OLLAMA_PID=$!
+        echo -e "${GREEN}✓ Ollama started (PID: $OLLAMA_PID)${NC}"
+        
+        # Wait for Ollama to be ready
+        echo -e "${YELLOW}Waiting for Ollama to be ready...${NC}"
+        for i in {1..30}; do
+            if curl -s http://localhost:11434/api/tags > /dev/null 2>&1; then
+                echo -e "${GREEN}✓ Ollama is ready!${NC}"
+                # Check if models are available
+                if curl -s http://localhost:11434/api/tags | grep -q '"name"'; then
+                    echo -e "${GREEN}✓ Models available${NC}"
+                else
+                    echo -e "${YELLOW}⚠ No models found. Run: ollama pull phi${NC}"
+                fi
+                break
+            fi
+            if [ $i -eq 30 ]; then
+                echo -e "${YELLOW}⚠ Ollama startup timed out${NC}"
+                break
+            fi
+            sleep 1
+        done
+    else
+        echo -e "${GREEN}✓ Ollama is already running${NC}"
+    fi
+else
+    echo -e "${YELLOW}⚠ Ollama not found. Install from: https://ollama.ai${NC}"
+    echo -e "${YELLOW}   Continuing without Ollama (fallback translations will be used)${NC}"
+fi
+
 # Install dependencies if node_modules doesn't exist
 echo -e "${BLUE}Setting up dependencies...${NC}"
 
@@ -120,11 +156,21 @@ echo -e "${GREEN}✓ All services are running!${NC}"
 echo -e "${BLUE}╠════════════════════════════════════════════╣${NC}"
 echo -e "${BLUE}║ Frontend:  ${GREEN}http://localhost:3000${BLUE}         ║${NC}"
 echo -e "${BLUE}║ Backend:   ${GREEN}http://localhost:5001${BLUE}         ║${NC}"
-echo -e "${BLUE}║ Ollama:    ${YELLOW}http://localhost:11434${BLUE}${NC} (if running)"
+if [ ! -z "$OLLAMA_PID" ]; then
+    echo -e "${BLUE}║ Ollama:    ${GREEN}http://localhost:11434${BLUE}       ║${NC}"
+else
+    if command -v ollama &> /dev/null; then
+        echo -e "${BLUE}║ Ollama:    ${YELLOW}Not running${BLUE}                  ║${NC}"
+    else
+        echo -e "${BLUE}║ Ollama:    ${YELLOW}Not installed${BLUE}                ║${NC}"
+    fi
+fi
 echo -e "${BLUE}╠════════════════════════════════════════════╣${NC}"
-echo -e "${YELLOW}📝 To use real translations:${NC}"
-echo -e "${YELLOW}   1. ollama serve${NC}"
-echo -e "${YELLOW}   2. ollama pull mistral${NC}"
+echo -e "${YELLOW}📝 To install Ollama:${NC}"
+echo -e "${YELLOW}   brew install ollama${NC}"
+echo -e "${YELLOW}${NC}"
+echo -e "${YELLOW}📝 To pull a faster model:${NC}"
+echo -e "${YELLOW}   ollama pull phi${NC}"
 echo -e "${BLUE}╠════════════════════════════════════════════╣${NC}"
 echo -e "${YELLOW}Press Ctrl+C to stop all services${NC}"
 echo -e "${BLUE}╚════════════════════════════════════════════╝${NC}"
@@ -136,8 +182,12 @@ cleanup() {
     echo -e "${YELLOW}Shutting down services...${NC}"
     kill $BACKEND_PID 2>/dev/null || true
     kill $FRONTEND_PID 2>/dev/null || true
+    if [ ! -z "$OLLAMA_PID" ]; then
+        kill $OLLAMA_PID 2>/dev/null || true
+    fi
     wait $BACKEND_PID 2>/dev/null || true
     wait $FRONTEND_PID 2>/dev/null || true
+    wait $OLLAMA_PID 2>/dev/null || true
     echo -e "${GREEN}✓ All services stopped${NC}"
     exit 0
 }

@@ -1,9 +1,77 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import './App.css';
 
 // API configuration - works in development and production
 const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+
+function DraggableWindow({ title, children, icon, className, initialX = 0, initialY = 0 }) {
+  const [isDragging, setIsDragging] = useState(false);
+  const [position, setPosition] = useState({ x: initialX, y: initialY });
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const windowRef = useRef(null);
+
+  const handleMouseDown = (e) => {
+    if (e.target.closest('.window-header')) {
+      setIsDragging(true);
+      const rect = windowRef.current.getBoundingClientRect();
+      setOffset({
+        x: e.clientX - rect.x,
+        y: e.clientY - rect.y
+      });
+    }
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      if (!isDragging || !windowRef.current) return;
+      
+      let newX = e.clientX - offset.x;
+      let newY = e.clientY - offset.y;
+      
+      // Constrain to viewport
+      newX = Math.max(0, Math.min(newX, window.innerWidth - 100));
+      newY = Math.max(0, Math.min(newY, window.innerHeight - 50));
+      
+      setPosition({ x: newX, y: newY });
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+    };
+
+    if (isDragging) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+      return () => {
+        window.removeEventListener('mousemove', handleMouseMove);
+        window.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [isDragging, offset]);
+
+  return (
+    <div
+      ref={windowRef}
+      className={`draggable-window ${className} ${isDragging ? 'dragging' : ''}`}
+      style={{
+        left: `${position.x}px`,
+        top: `${position.y}px`,
+        cursor: isDragging ? 'grabbing' : 'grab',
+        zIndex: isDragging ? 1000 : 'auto'
+      }}
+      onMouseDown={handleMouseDown}
+    >
+      <div className="window-header">
+        <span className="window-icon">{icon}</span>
+        <h3 className="window-title">{title}</h3>
+      </div>
+      <div className="window-content">
+        {children}
+      </div>
+    </div>
+  );
+}
 
 function App() {
   const [isRecording, setIsRecording] = useState(false);
@@ -16,6 +84,34 @@ function App() {
 
   const audioChunksRef = useRef([]);
   const recognitionRef = useRef(null);
+
+  // Memoized translation handler
+  const handleTranslate = useCallback(async (text) => {
+    if (!text.trim()) return;
+
+    setLoading(true);
+    try {
+      const response = await axios.post(`${API_BASE}/api/translate`, {
+        text: text,
+        targetLanguage: targetLanguage
+      });
+
+      setTranslatedText(response.data.translatedText);
+      
+      // Add to transcript history
+      setTranscripts(prev => [{
+        original: response.data.originalText,
+        translated: response.data.translatedText,
+        timestamp: new Date().toLocaleTimeString()
+      }, ...prev]);
+
+      setError('');
+    } catch (err) {
+      setError('Translation failed: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setLoading(false);
+    }
+  }, [targetLanguage]);
 
   // Initialize Web Speech API
   useEffect(() => {
@@ -67,34 +163,7 @@ function App() {
     } else {
       setError('Speech Recognition not supported in this browser');
     }
-  }, []);
-
-  const handleTranslate = async (text) => {
-    if (!text.trim()) return;
-
-    setLoading(true);
-    try {
-      const response = await axios.post(`${API_BASE}/api/translate`, {
-        text: text,
-        targetLanguage: targetLanguage
-      });
-
-      setTranslatedText(response.data.translatedText);
-      
-      // Add to transcript history
-      setTranscripts(prev => [{
-        original: response.data.originalText,
-        translated: response.data.translatedText,
-        timestamp: new Date().toLocaleTimeString()
-      }, ...prev]);
-
-      setError('');
-    } catch (err) {
-      setError('Translation failed: ' + (err.response?.data?.error || err.message));
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [handleTranslate]);
 
   const startRecording = () => {
     if (recognitionRef.current) {
@@ -144,15 +213,16 @@ function App() {
               <option value="fr">French (Français)</option>
               <option value="de">German (Deutsch)</option>
               <option value="ja">Japanese (日本語)</option>
+              <option value="ko">Korean (한국어)</option>
+              <option value="vi">Vietnamese (Tiếng Việt)</option>
             </select>
           </div>
         </div>
 
         {error && <div className="error-message">{error}</div>}
 
-        <div className="translation-display">
-          <div className="text-box original">
-            <h3>🗣️ Original Text</h3>
+        <div className="workspace">
+          <DraggableWindow title="Original Text" icon="🗣️" className="original-window" initialX={50} initialY={250}>
             <div className="text-content">
               {originalText || <span className="placeholder">Your speech will appear here...</span>}
             </div>
@@ -163,35 +233,31 @@ function App() {
             >
               {loading ? '⏳ Translating...' : '✨ Translate'}
             </button>
-          </div>
+          </DraggableWindow>
 
-          <div className="arrow">→</div>
-
-          <div className="text-box translated">
-            <h3>🌐 Translation</h3>
+          <DraggableWindow title="Translation" icon="🌐" className="translation-window" initialX={470} initialY={250}>
             <div className="text-content">
               {translatedText || <span className="placeholder">Translation will appear here...</span>}
             </div>
-          </div>
-        </div>
+          </DraggableWindow>
 
-        <div className="history">
-          <h3>📝 Translation History</h3>
-          <div className="history-list">
-            {transcripts.length === 0 ? (
-              <p className="no-history">No translations yet. Start recording to begin!</p>
-            ) : (
-              transcripts.map((item, index) => (
-                <div key={index} className="history-item">
-                  <div className="history-time">{item.timestamp}</div>
-                  <div className="history-content">
-                    <p><strong>Original:</strong> {item.original}</p>
-                    <p><strong>Translation:</strong> {item.translated}</p>
+          <DraggableWindow title="Translation History" icon="📝" className="history-window" initialX={120} initialY={550}>
+            <div className="history-list">
+              {transcripts.length === 0 ? (
+                <p className="no-history">No translations yet. Start recording to begin!</p>
+              ) : (
+                transcripts.map((item, index) => (
+                  <div key={index} className="history-item">
+                    <div className="history-time">{item.timestamp}</div>
+                    <div className="history-content">
+                      <p><strong>Original:</strong> {item.original}</p>
+                      <p><strong>Translation:</strong> {item.translated}</p>
+                    </div>
                   </div>
-                </div>
-              ))
-            )}
-          </div>
+                ))
+              )}
+            </div>
+          </DraggableWindow>
         </div>
       </div>
     </div>
